@@ -29,7 +29,7 @@
  *          result in same scheduling.
  *          If a better accuracy is needed, hardware timer must be used
  */
-typedef uint32_t (*task_cb_f)();
+typedef uint32_t (*task_cb_f)(void* const self);
 
 /**
  * \brief   Value to return from task to remove it
@@ -108,7 +108,11 @@ void App_Scheduler_init(void);
  *          Maximum execution time required for the task to be executed
  * \return  True if able to add, false otherwise
  */
-app_scheduler_res_e App_Scheduler_addTask_execTime(task_cb_f cb, uint32_t delay_ms, uint32_t exec_time_us);
+app_scheduler_res_e App_Scheduler_addTask_execTime_Caller(task_cb_f cb, void* const caller, uint32_t delay_ms, uint32_t exec_time_us);
+static inline app_scheduler_res_e App_Scheduler_addTask_execTime(task_cb_f cb, uint32_t delay_ms, uint32_t exec_time_us)
+{
+    return App_Scheduler_addTask_execTime_Caller(cb, NULL, delay_ms, exec_time_us);
+}
 
 #ifdef APP_SCHEDULER_MAX_EXEC_TIME_US
 /**
@@ -123,9 +127,9 @@ app_scheduler_res_e App_Scheduler_addTask_execTime(task_cb_f cb, uint32_t delay_
  *
  * \note    This call is deprecated and you should use @ref App_Scheduler_addTask_execTime instead
  */
-static inline app_scheduler_res_e App_Scheduler_addTask(task_cb_f cb, uint32_t delay_ms)
+static inline app_scheduler_res_e App_Scheduler_addTask(task_cb_f cb, void* const caller, uint32_t delay_ms)
 {
-    return App_Scheduler_addTask_execTime(cb, delay_ms, APP_SCHEDULER_MAX_EXEC_TIME_US);
+    return App_Scheduler_addTask_execTime(cb, caller, delay_ms, APP_SCHEDULER_MAX_EXEC_TIME_US);
 }
 #endif
 
@@ -135,6 +139,10 @@ static inline app_scheduler_res_e App_Scheduler_addTask(task_cb_f cb, uint32_t d
  *          Callback already registered from App_Scheduler_addTask.
  * \return  True if able to cancel, false otherwise (not existing)
  */
-app_scheduler_res_e App_Scheduler_cancelTask(task_cb_f cb);
+app_scheduler_res_e App_Scheduler_cancelTask_Caller(task_cb_f cb, void* const caller);
+static inline app_scheduler_res_e App_Scheduler_cancelTask(task_cb_f cb)
+{
+    return App_Scheduler_cancelTask_Caller(cb, NULL);
+}
 
 #endif //_APP_SCHEDULER_H_

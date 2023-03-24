@@ -38,6 +38,7 @@ typedef struct
 typedef struct
 {
     task_cb_f                           func; /* Cb of this task */
+    void*                               caller; /* used as parameter in Cb */
     timestamp_t                         next_ts;/* When is the next execution */
     uint32_t                            exec_time_us; /* Time needed for execution */
     bool                                updated; /* Updated in IRQ context? */
@@ -210,7 +211,7 @@ static void perform_task(task_t * task)
         return;
     }
     // Execute the task selected
-    next = task_cb();
+    next = task_cb(task->caller);
 
     // Update its next execution time under critical section
     // to avoid overriding new value set by IRQ
@@ -224,6 +225,7 @@ static void perform_task(task_t * task)
             // Task doesn't have to be executed again
             // so safe to release it
             task->func = NULL;
+            task->caller = NULL;
         }
         else
         {
@@ -249,6 +251,7 @@ static task_t * get_next_task_locked()
             {
                 // Time to clear the task
                 m_tasks[i].func = NULL;
+                m_tasks[i].caller = NULL;
                 continue;
             }
 
@@ -354,7 +357,7 @@ static bool add_task_to_table_locked(task_t * task_p)
     for (uint8_t i = 0; i < APP_SCHEDULER_ALL_TASKS; i++)
     {
         // First check if task already exist
-        if (m_tasks[i].func == task_p->func)
+        if (m_tasks[i].func == task_p->func && m_tasks[i].caller == task_p->caller)
         {
             // Task found, just update the next timestamp and exit
             m_tasks[i].next_ts = task_p->next_ts;
@@ -388,14 +391,14 @@ static bool add_task_to_table_locked(task_t * task_p)
  * \return  Pointer to the removed task
  * \note    Must be called from critical section
  */
-static task_t * remove_task_from_table_locked(task_cb_f cb)
+static task_t * remove_task_from_table_locked(task_cb_f cb, void* const caller)
 {
     task_t * removed_task = NULL;
 
     Sys_enterCriticalSection();
     for (uint8_t i = 0; i < APP_SCHEDULER_ALL_TASKS; i++)
     {
-        if (m_tasks[i].func == cb)
+        if (m_tasks[i].func == cb && m_tasks[i].caller == caller)
         {
             // Mark the task as removed
             m_tasks[i].updated = true;
@@ -426,17 +429,19 @@ void App_Scheduler_init()
     for (uint8_t i = 0; i < APP_SCHEDULER_ALL_TASKS; i++)
     {
         m_tasks[i].func = NULL;
+        m_tasks[i].caller = NULL;
     }
 
     m_initialized = true;
 }
-
-app_scheduler_res_e App_Scheduler_addTask_execTime(task_cb_f cb,
-                                                   uint32_t delay_ms,
-                                                   uint32_t exec_time_us)
+app_scheduler_res_e App_Scheduler_addTask_execTime_Caller(task_cb_f cb,
+                                                          void * const caller,
+                                                          uint32_t delay_ms,
+                                                          uint32_t exec_time_us)
 {
     task_t new_task = {
         .func = cb,
+        .caller = caller,
         .exec_time_us = exec_time_us,
         .updated = false,
         .removed = false,
@@ -470,7 +475,7 @@ app_scheduler_res_e App_Scheduler_addTask_execTime(task_cb_f cb,
         // - Updating current next scheduled task
         // - New task is before next task
         if (m_next_task_p == NULL
-            || m_next_task_p->func == cb
+            || (m_next_task_p->func == cb && m_next_task_p->caller == caller)
             || is_timestamp_before(&new_task.next_ts, &m_next_task_p->next_ts))
         {
             m_force_reschedule = true;
@@ -488,7 +493,7 @@ app_scheduler_res_e App_Scheduler_addTask_execTime(task_cb_f cb,
     return res;
 }
 
-app_scheduler_res_e App_Scheduler_cancelTask(task_cb_f cb)
+app_scheduler_res_e App_Scheduler_cancelTask_Caller(task_cb_f cb, void* const caller)
 {
     app_scheduler_res_e res;
 
@@ -499,7 +504,7 @@ app_scheduler_res_e App_Scheduler_cancelTask(task_cb_f cb)
 
     Sys_enterCriticalSection();
 
-    task_t * removed_task = remove_task_from_table_locked(cb);
+    task_t * removed_task = remove_task_from_table_locked(cb, caller);
     if (removed_task != NULL)
     {
         // Force our task to be reschedule asap to do the cleanup of the task
