@@ -7,7 +7,7 @@
 #include "api.h"
 
 #define DEBUG_LOG_MODULE_NAME "APP_PER_LIB"
-#define DEBUG_LOG_MAX_LEVEL LVL_DEBUG
+#define DEBUG_LOG_MAX_LEVEL LVL_INFO
 #include "debug_log.h"
 
 #define APP_PERSISTENT_MEMORY_AREA_ID 0x8AE573BA
